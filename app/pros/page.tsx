@@ -17,7 +17,7 @@ interface Availability {
   sat: boolean
   sun: boolean
   from: string // HH:mm
-  to: string // HH:mm
+  to: string   // HH:mm
 }
 
 interface FormState {
@@ -43,10 +43,54 @@ interface FormState {
 
 // ========= Config =========
 const FORM_ENDPOINT = '/api/therapists' // conectar con backoffice
-const NOTIFY_EMAIL = 'mrusinol@troposferica.com' // usado solo en fallback opcional
 
-// ========= I18N =========
-const I18N: Record<UiLang, any> = {
+// ========= I18N types =========
+type I18nDays = Record<DayKey, string>
+
+type I18nLabels = {
+  name: string
+  email: string
+  phone: string
+  city: string
+  country: string
+  colegiado: string
+  experience: string
+  website: string
+  modality: string
+  modalities: { inperson: string; online: string; hybrid: string }
+  langs: string
+  approaches: string
+  specialties: string
+  price: string
+  priceMin: string
+  priceMax: string
+  availability: string
+  days: I18nDays
+  timeFrom: string
+  timeTo: string
+  notes: string
+  consent: string
+  nonEmergency: string
+  submit: string
+  success: string
+  error: string
+  privacy: string
+}
+
+type I18nEntry = {
+  langName: string
+  metaTitle: string
+  heroTitle: string
+  heroSubtitle: string
+  cta: string
+  features: { title: string; desc: string }[]
+  formTitle: string
+  required: string
+  labels: I18nLabels
+}
+
+// ========= I18N content =========
+const I18N: Record<UiLang, I18nEntry> = {
   es: {
     langName: 'ES',
     metaTitle: 'Psicofinders · Alta de profesionales',
@@ -146,7 +190,7 @@ const I18N: Record<UiLang, any> = {
   },
   en: {
     langName: 'EN',
-    metaTitle: 'Psicofinders · Therapist sign‑up',
+    metaTitle: 'Psicofinders · Therapist sign-up',
     heroTitle: 'Join Psicofinders',
     heroSubtitle:
       'Receive patients who match your profile and availability. We verify licensing and prioritize ethical, logistical fit.',
@@ -156,7 +200,7 @@ const I18N: Record<UiLang, any> = {
       { title: 'Verification', desc: 'License and liability insurance validation.' },
       { title: 'Control', desc: 'You decide visibility, specialties and schedule.' },
     ],
-    formTitle: 'Sign‑up form',
+    formTitle: 'Sign-up form',
     required: '(required)',
     labels: {
       name: 'Full name',
@@ -168,7 +212,7 @@ const I18N: Record<UiLang, any> = {
       experience: 'Years of experience',
       website: 'Website or LinkedIn (optional)',
       modality: 'Care modality',
-      modalities: { inperson: 'In‑person', online: 'Online', hybrid: 'Hybrid' },
+      modalities: { inperson: 'In-person', online: 'Online', hybrid: 'Hybrid' },
       langs: 'Languages',
       approaches: 'Therapeutic approaches',
       specialties: 'Specialties',
@@ -193,7 +237,7 @@ const I18N: Record<UiLang, any> = {
     metaTitle: 'Psicofinders · Inscription professionnels',
     heroTitle: 'Rejoindre Psicofinders',
     heroSubtitle:
-      'Recevez des patient·e·s correspondant à votre profil et à vos disponibilités. Licence vérifiée et adéquation éthique/logistique priorisées.',
+      "Recevez des patient·e·s correspondant à votre profil et à vos disponibilités. Licence vérifiée et adéquation éthique/logistique priorisées.",
     cta: "Je m'inscris",
     features: [
       { title: 'Leads qualifiés', desc: 'Utilisateurs filtrés par langue, modalité et budget.' },
@@ -241,7 +285,7 @@ const SPECIALTIES = [
   'Estado de ánimo / Depresión',
   'Trauma',
   'Pareja / Familia',
-  'Infanto‑juvenil',
+  'Infanto-juvenil',
   'Adicciones',
   'Duelo',
   'TDAH',
@@ -359,12 +403,31 @@ export default function TherapistSignupLanding() {
   const handleChange = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
-  const toggleArray = (key: 'approaches' | 'specialties' | 'langs', value: string) => {
+  // toggleArray sin any, con overloads
+  function toggleArray(key: 'approaches' | 'specialties', value: string): void
+  function toggleArray(key: 'langs', value: LangKey): void
+  function toggleArray(
+    key: 'approaches' | 'specialties' | 'langs',
+    value: string | LangKey
+  ) {
     setForm((f) => {
-      const arr = new Set(f[key])
-      if (arr.has(value)) arr.delete(value)
-      else arr.add(value)
-      return { ...f, [key]: Array.from(arr) as any }
+      if (key === 'langs') {
+        const list = new Set(f.langs)
+        const v = value as LangKey
+        list.has(v) ? list.delete(v) : list.add(v)
+        return { ...f, langs: Array.from(list) }
+      }
+      if (key === 'approaches') {
+        const list = new Set(f.approaches)
+        const v = value as string
+        list.has(v) ? list.delete(v) : list.add(v)
+        return { ...f, approaches: Array.from(list) }
+      }
+      // key === 'specialties'
+      const list = new Set(f.specialties)
+      const v = value as string
+      list.has(v) ? list.delete(v) : list.add(v)
+      return { ...f, specialties: Array.from(list) }
     })
   }
 
@@ -390,39 +453,14 @@ export default function TherapistSignupLanding() {
     e.preventDefault()
     if (!isValid) return
     try {
-      if (FORM_ENDPOINT) {
-        const res = await fetch(FORM_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error('Bad response')
-        setStatus('ok')
-        e.currentTarget.reset()
-        return
-      }
-      const summary = encodeURIComponent(
-        [
-          `Nombre: ${form.name}`,
-          `Email: ${form.email}`,
-          `Teléfono: ${form.phone || '-'}`,
-          `Ciudad/País: ${form.city}, ${form.country}`,
-          `Colegiación: ${form.colegiado}`,
-          `Experiencia: ${form.experience || '-'}`,
-          `Modalidad: ${form.modality}`,
-          `Idiomas: ${form.langs.join(', ')}`,
-          `Enfoques: ${form.approaches.join(', ') || '-'}`,
-          `Especialidades: ${form.specialties.join(', ') || '-'}`,
-          `Precio: ${form.priceMin || '?'}–${form.priceMax || '?'} €`,
-          `Disponibilidad: ${dayKeys.filter((d) => form.availability[d]).join(', ')} ${form.availability.from}-${form.availability.to}`,
-          `Notas: ${form.notes || '-'}`,
-        ].join('\n')
-      )
-      const mailto = `mailto:${NOTIFY_EMAIL}?subject=${encodeURIComponent(
-        `Alta profesional Psicofinders · ${form.name}`
-      )}&body=${summary}`
-      window.location.href = mailto
+      const res = await fetch(FORM_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('Bad response')
       setStatus('ok')
+      e.currentTarget.reset()
     } catch (err) {
       console.error(err)
       setStatus('err')
@@ -461,7 +499,7 @@ export default function TherapistSignupLanding() {
           <h1 className="text-4xl font-extrabold tracking-tight md:text-5xl">{t.heroTitle}</h1>
           <p className="mt-4 text-lg text-gray-700">{t.heroSubtitle}</p>
           <div className="mt-6 flex flex-wrap gap-2">
-            {t.features.map((f: { title: string; desc: string }, i: number) => (
+            {t.features.map((f, i) => (
               <div key={i} className="rounded-2xl border bg-white p-3 shadow-sm">
                 <div className="text-sm font-semibold">{f.title}</div>
                 <div className="text-sm text-gray-600">{f.desc}</div>
@@ -501,7 +539,7 @@ export default function TherapistSignupLanding() {
             type="text"
             autoComplete="off"
             value={form.honey}
-            onChange={(e) => handleChange('honey', e.target.value)}
+            onChange={(e) => handleChange('honey', e.currentTarget.value)}
             className="hidden"
             tabIndex={-1}
             aria-hidden="true"
@@ -595,7 +633,7 @@ export default function TherapistSignupLanding() {
                   id={`lang-${key}`}
                   label={label}
                   checked={form.langs.includes(key)}
-                  onChange={(checked) => (checked ? toggleArray('langs', key) : toggleArray('langs', key))}
+                  onChange={(_checked) => toggleArray('langs', key)}
                 />
               ))}
             </div>
@@ -611,7 +649,7 @@ export default function TherapistSignupLanding() {
                   id={`ap-${a}`}
                   label={a}
                   checked={form.approaches.includes(a)}
-                  onChange={() => toggleArray('approaches', a)}
+                  onChange={(_checked) => toggleArray('approaches', a)}
                 />
               ))}
             </div>
@@ -627,7 +665,7 @@ export default function TherapistSignupLanding() {
                   id={`sp-${s}`}
                   label={s}
                   checked={form.specialties.includes(s)}
-                  onChange={() => toggleArray('specialties', s)}
+                  onChange={(_checked) => toggleArray('specialties', s)}
                 />
               ))}
             </div>
@@ -661,7 +699,7 @@ export default function TherapistSignupLanding() {
                 <Checkbox
                   key={d}
                   id={`day-${d}`}
-                  label={t.labels.days[d as keyof typeof t.labels.days]}
+                  label={t.labels.days[d]}
                   checked={form.availability[d]}
                   onChange={(v) => setForm((f) => ({ ...f, availability: { ...f.availability, [d]: v } }))}
                 />
