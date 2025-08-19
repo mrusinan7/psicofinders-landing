@@ -2,6 +2,28 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 
+type ApplicationRow = {
+  submitted_at: string
+  name: string
+  email: string
+  phone: string | null
+  city: string
+  country: string
+  colegiado: string
+  experience: number | null
+  website: string | null
+  modality: 'inperson' | 'online' | 'hybrid' | string
+  langs: string[] | null
+  approaches: string[] | null
+  specialties: string[] | null
+  price_min: number | null
+  price_max: number | null
+  availability: unknown
+  notes: string | null
+  ui_lang: string | null
+  source: string | null
+}
+
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('therapist_applications')
@@ -37,7 +59,7 @@ export async function GET() {
     'source',
   ]
 
-  const rows = (data || []).map((r: any) => [
+  const rows = ((data ?? []) as ApplicationRow[]).map((r) => [
     r.submitted_at,
     r.name,
     r.email,
