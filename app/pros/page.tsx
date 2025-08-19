@@ -1,10 +1,11 @@
 'use client';
+
 import React, { useMemo, useState } from "react";
 
 // ---- CONFIG ----
-// If you already have a backend endpoint, set it here. If empty, we'll fallback to a mailto: draft.
-const FORM_ENDPOINT = ""; // e.g., "/api/therapists" or "https://formspree.io/f/xxxxxx"
-const NOTIFY_EMAIL = "mrusinol@troposferica.com"; // fallback recipient for mailto
+// Con backoffice: apunta al endpoint de tu API Next
+const FORM_ENDPOINT = "/api/therapists"; // e.g., "/api/therapists" o "https://tu-dominio/api/therapists"
+const NOTIFY_EMAIL = "mrusinol@troposferica.com"; // Solo usado si alguna vez activarás fallback mailto
 
 // ---- I18N ----
 const I18N = {
@@ -223,7 +224,7 @@ const I18N = {
 };
 
 // ---- Options ----
-const APPROACHES = ["TCC", "EMDR", "ACT", "Sistémica", "Psicodinámica", "Humanista", "Gestalt", "Mindfulness"];
+const APPROACHES = ["TCC", "EMDR", "ACT", "Sistémica", "Psicodinámica", "Humanista", "Gestalt", "Mindfulness"] as const;
 const SPECIALTIES = [
   "Ansiedad",
   "Estado de ánimo / Depresión",
@@ -235,53 +236,62 @@ const SPECIALTIES = [
   "TDAH",
   "Identidad / Diversidad",
   "Estrés laboral",
-];
+] as const;
 
 const LANGS = [
   { key: "es", label: "ES" },
   { key: "ca", label: "CA" },
   { key: "en", label: "EN" },
   { key: "fr", label: "FR" },
-];
+] as const;
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-block rounded-full border px-3 py-1 text-sm">
-      {children}
-    </span>
+    <span className="inline-block rounded-full border px-3 py-1 text-sm">{children}</span>
   );
 }
 
-function Checkbox({ checked, onChange, id, label }: any) {
+type CheckboxProps = {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  id: string;
+  label: string;
+};
+function Checkbox({ checked, onChange, id, label }: CheckboxProps) {
   return (
-    <label htmlFor={id} className="flex items-center gap-2 cursor-pointer select-none">
+    <label htmlFor={id} className="flex cursor-pointer select-none items-center gap-2">
       <input
         id={id}
         type="checkbox"
         className="h-4 w-4 rounded border-gray-300"
         checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
       />
       <span>{label}</span>
     </label>
   );
 }
 
-function Input({ label, required, ...props }: any) {
+type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  required?: boolean;
+};
+function Input({ label, required, ...props }: InputProps) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-sm font-medium">
         {label} {required && <span className="text-red-600">*</span>}
       </label>
-      <input
-        {...props}
-        className="rounded-xl border px-3 py-2 focus:outline-none focus:ring"
-      />
+      <input {...props} className="rounded-xl border px-3 py-2 focus:outline-none focus:ring" />
     </div>
   );
 }
 
-function Select({ label, required, children, ...props }: any) {
+type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
+  label: string;
+  required?: boolean;
+};
+function Select({ label, required, children, ...props }: SelectProps) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-sm font-medium">
@@ -294,26 +304,63 @@ function Select({ label, required, children, ...props }: any) {
   );
 }
 
-function Textarea({ label, required, ...props }: any) {
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+  required?: boolean;
+};
+function Textarea({ label, required, ...props }: TextareaProps) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-sm font-medium">
         {label} {required && <span className="text-red-600">*</span>}
       </label>
-      <textarea
-        {...props}
-        className="min-h-[90px] rounded-xl border px-3 py-2 focus:outline-none focus:ring"
-      />
+      <textarea {...props} className="min-h-[90px] rounded-xl border px-3 py-2 focus:outline-none focus:ring" />
     </div>
   );
 }
 
+// ---- Form types ----
+
+type Availability = {
+  mon: boolean;
+  tue: boolean;
+  wed: boolean;
+  thu: boolean;
+  fri: boolean;
+  sat: boolean;
+  sun: boolean;
+  from: string; // HH:mm
+  to: string;   // HH:mm
+};
+
+type Modality = 'inperson' | 'online' | 'hybrid';
+
+type FormState = {
+  name: string;
+  email: string;
+  phone: string;
+  city: string;
+  country: string;
+  colegiado: string;
+  experience: string;
+  website: string;
+  modality: Modality;
+  langs: string[];
+  approaches: string[];
+  specialties: string[];
+  priceMin: string;
+  priceMax: string;
+  availability: Availability;
+  notes: string;
+  consent: boolean;
+  honey: string; // honeypot
+};
+
 export default function TherapistSignupLanding() {
-  const [uiLang, setUiLang] = useState<"es" | "ca" | "en" | "fr">("es");
+  const [uiLang, setUiLang] = useState<'es' | 'ca' | 'en' | 'fr'>("es");
   const t = I18N[uiLang];
 
-  // Form state
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
     phone: "",
@@ -324,8 +371,8 @@ export default function TherapistSignupLanding() {
     website: "",
     modality: "inperson",
     langs: ["es"],
-    approaches: [] as string[],
-    specialties: [] as string[],
+    approaches: [],
+    specialties: [],
     priceMin: "",
     priceMax: "",
     availability: {
@@ -341,21 +388,23 @@ export default function TherapistSignupLanding() {
     },
     notes: "",
     consent: false,
-    honey: "", // honeypot
+    honey: "",
   });
 
-  const [status, setStatus] = useState<"idle" | "ok" | "err">("idle");
+  const [status, setStatus] = useState<'idle' | 'ok' | 'err'>("idle");
 
-  const handleChange = (key: string, value: any) => setForm((f) => ({ ...f, [key]: value }));
+  function handleChange<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
 
-  const toggleArray = (key: "approaches" | "specialties" | "langs", value: string) => {
+  function toggleArray(key: 'approaches' | 'specialties' | 'langs', value: string) {
     setForm((f) => {
       const arr = new Set(f[key]);
       if (arr.has(value)) arr.delete(value);
       else arr.add(value);
-      return { ...f, [key]: Array.from(arr) } as any;
+      return { ...f, [key]: Array.from(arr) };
     });
-  };
+  }
 
   const dayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -374,7 +423,7 @@ export default function TherapistSignupLanding() {
     source: "landing-pro-mvp",
   }), [form, uiLang]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!isValid) return;
     try {
@@ -389,7 +438,7 @@ export default function TherapistSignupLanding() {
         (e.target as HTMLFormElement).reset();
         return;
       }
-      // Fallback: open a mail draft with JSON content (shortened)
+      // Fallback mailto (no usado si FORM_ENDPOINT tiene valor)
       const summary = encodeURIComponent(
         [
           `Nombre: ${form.name}`,
@@ -411,7 +460,7 @@ export default function TherapistSignupLanding() {
         ].join("\n")
       );
       const mailto = `mailto:${NOTIFY_EMAIL}?subject=${encodeURIComponent(
-        "Alta profesional Psicofinders"
+        `Alta profesional Psicofinders · ${form.name}`
       )}&body=${summary}`;
       window.location.href = mailto;
       setStatus("ok");
@@ -487,11 +536,12 @@ export default function TherapistSignupLanding() {
         <p className="mt-1 text-sm text-gray-600">{t.labels.nonEmergency}</p>
 
         <form className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
+          {/* Honeypot */}
           <input
             type="text"
             autoComplete="off"
             value={form.honey}
-            onChange={(e) => handleChange("honey", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("honey", e.target.value)}
             className="hidden"
             tabIndex={-1}
             aria-hidden="true"
@@ -502,7 +552,7 @@ export default function TherapistSignupLanding() {
             required
             placeholder="María López"
             value={form.name}
-            onChange={(e: any) => handleChange("name", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("name", e.target.value)}
           />
 
           <Input
@@ -511,7 +561,7 @@ export default function TherapistSignupLanding() {
             type="email"
             placeholder="nombre@clinica.com"
             value={form.email}
-            onChange={(e: any) => handleChange("email", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("email", e.target.value)}
           />
 
           <Input
@@ -519,7 +569,7 @@ export default function TherapistSignupLanding() {
             type="tel"
             placeholder="+34 6XX XX XX XX"
             value={form.phone}
-            onChange={(e: any) => handleChange("phone", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("phone", e.target.value)}
           />
 
           <Input
@@ -527,7 +577,7 @@ export default function TherapistSignupLanding() {
             required
             placeholder="Barcelona"
             value={form.city}
-            onChange={(e: any) => handleChange("city", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("city", e.target.value)}
           />
 
           <Input
@@ -535,7 +585,7 @@ export default function TherapistSignupLanding() {
             required
             placeholder="España"
             value={form.country}
-            onChange={(e: any) => handleChange("country", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("country", e.target.value)}
           />
 
           <Input
@@ -543,7 +593,7 @@ export default function TherapistSignupLanding() {
             required
             placeholder="COPC XXXXX"
             value={form.colegiado}
-            onChange={(e: any) => handleChange("colegiado", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("colegiado", e.target.value)}
           />
 
           <Input
@@ -552,21 +602,21 @@ export default function TherapistSignupLanding() {
             min={0}
             placeholder="5"
             value={form.experience}
-            onChange={(e: any) => handleChange("experience", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("experience", e.target.value)}
           />
 
           <Input
             label={t.labels.website}
             placeholder="https://…"
             value={form.website}
-            onChange={(e: any) => handleChange("website", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("website", e.target.value)}
           />
 
           <Select
             label={`${t.labels.modality} ${t.required}`}
             required
             value={form.modality}
-            onChange={(e: any) => handleChange("modality", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChange("modality", e.target.value as Modality)}
           >
             <option value="inperson">{t.labels.modalities.inperson}</option>
             <option value="online">{t.labels.modalities.online}</option>
@@ -583,7 +633,7 @@ export default function TherapistSignupLanding() {
                   id={`lang-${key}`}
                   label={label}
                   checked={form.langs.includes(key)}
-                  onChange={(v: boolean) => toggleArray("langs", key)}
+                  onChange={(checked: boolean) => toggleArray("langs", key)}
                 />
               ))}
             </div>
@@ -629,7 +679,7 @@ export default function TherapistSignupLanding() {
               min={0}
               placeholder="40"
               value={form.priceMin}
-              onChange={(e: any) => handleChange("priceMin", e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("priceMin", e.target.value)}
             />
             <Input
               label={`${t.labels.price} — ${t.labels.priceMax}`}
@@ -637,7 +687,7 @@ export default function TherapistSignupLanding() {
               min={0}
               placeholder="90"
               value={form.priceMax}
-              onChange={(e: any) => handleChange("priceMax", e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("priceMax", e.target.value)}
             />
           </div>
 
@@ -649,13 +699,10 @@ export default function TherapistSignupLanding() {
                 <Checkbox
                   key={d}
                   id={`day-${d}`}
-                  label={(t.labels.days as any)[d]}
-                  checked={(form.availability as any)[d]}
-                  onChange={(v: boolean) =>
-                    setForm((f) => ({
-                      ...f,
-                      availability: { ...(f.availability as any), [d]: v },
-                    }))
+                  label={(t.labels.days as Record<string, string>)[d]}
+                  checked={form.availability[d]}
+                  onChange={(checked: boolean) =>
+                    setForm((f) => ({ ...f, availability: { ...f.availability, [d]: checked } }))
                   }
                 />
               ))}
@@ -665,22 +712,16 @@ export default function TherapistSignupLanding() {
                 label={t.labels.timeFrom}
                 type="time"
                 value={form.availability.from}
-                onChange={(e: any) =>
-                  setForm((f) => ({
-                    ...f,
-                    availability: { ...(f.availability as any), from: e.target.value },
-                  }))
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setForm((f) => ({ ...f, availability: { ...f.availability, from: e.target.value } }))
                 }
               />
               <Input
                 label={t.labels.timeTo}
                 type="time"
                 value={form.availability.to}
-                onChange={(e: any) =>
-                  setForm((f) => ({
-                    ...f,
-                    availability: { ...(f.availability as any), to: e.target.value },
-                  }))
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setForm((f) => ({ ...f, availability: { ...f.availability, to: e.target.value } }))
                 }
               />
             </div>
@@ -691,7 +732,7 @@ export default function TherapistSignupLanding() {
             label={t.labels.notes}
             placeholder="Breve presentación, preferencias de casos, etc."
             value={form.notes}
-            onChange={(e: any) => handleChange("notes", e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleChange("notes", e.target.value)}
           />
 
           <div className="md:col-span-2 flex flex-col gap-3">
@@ -701,7 +742,7 @@ export default function TherapistSignupLanding() {
                 type="checkbox"
                 className="mt-1"
                 checked={form.consent}
-                onChange={(e) => handleChange("consent", e.target.checked)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("consent", e.target.checked)}
               />
               <label htmlFor="consent" className="text-sm">
                 {t.labels.consent} · <a href="#" className="underline">{t.labels.privacy}</a>
