@@ -4,8 +4,10 @@ import { NextResponse } from 'next/server'
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // No proteger la pantalla de login para evitar bucles
-  if (pathname === '/admin/login') return NextResponse.next()
+  // Permitir la pantalla de login y su route handler de autorización
+  if (pathname.startsWith('/admin/login')) {
+    return NextResponse.next()
+  }
 
   if (pathname.startsWith('/admin')) {
     const cookieHash = req.cookies.get('admin')?.value

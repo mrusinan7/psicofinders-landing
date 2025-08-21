@@ -638,7 +638,7 @@ export default function TherapistSignupLanding() {
                   id={`lang-${key}`}
                   label={label}
                   checked={form.langs.includes(key)}
-                  onChange={(_checked) => toggleArray('langs', key)}
+                  onChange={() => toggleArray('langs', key)}
                 />
               ))}
             </div>
@@ -654,7 +654,7 @@ export default function TherapistSignupLanding() {
                   id={`ap-${a}`}
                   label={a}
                   checked={form.approaches.includes(a)}
-                  onChange={(_checked) => toggleArray('approaches', a)}
+                  onChange={() => toggleArray('approaches', a)}
                 />
               ))}
             </div>
@@ -670,7 +670,7 @@ export default function TherapistSignupLanding() {
                   id={`sp-${s}`}
                   label={s}
                   checked={form.specialties.includes(s)}
-                  onChange={(_checked) => toggleArray('specialties', s)}
+                  onChange={() => toggleArray('specialties', s)}
                 />
               ))}
             </div>

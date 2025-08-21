@@ -1,39 +1,13 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createHash } from 'crypto'
 
 // En Next 15, searchParams puede ser Promise<...>
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
 export default async function AdminLoginPage({
   searchParams,
-}: {
-  searchParams?: SearchParams
-}) {
+}: { searchParams?: SearchParams }) {
   const sp = (await searchParams) ?? {}
   const err = typeof sp.err === 'string' ? sp.err : undefined
-
-  // Server Action INLINE (no export)
-  async function loginAction(formData: FormData) {
-    'use server'
-    const pwd = String(formData.get('password') ?? '')
-    const expectedHash = process.env.ADMIN_PASSWORD_HASH
-    if (!expectedHash) {
-      redirect('/admin/login?err=1')
-    }
-    const hash = createHash('sha256').update(pwd).digest('hex')
-    if (hash !== expectedHash) {
-      redirect('/admin/login?err=1')
-    }
-    cookies().set('admin', expectedHash, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 días
-    })
-    redirect('/admin')
-  }
 
   return (
     <main className="mx-auto max-w-md p-6">
@@ -48,12 +22,14 @@ export default async function AdminLoginPage({
         </div>
       )}
 
-      <form action={loginAction} className="mt-6 flex flex-col gap-3">
+      {/* Enviamos el formulario al route handler */}
+      <form method="POST" action="/admin/login/authorize" className="mt-6 flex flex-col gap-3">
         <input
           name="password"
           type="password"
           placeholder="********"
           className="rounded border px-3 py-2"
+          required
         />
         <button className="rounded bg-black px-4 py-2 text-white">Entrar</button>
       </form>
