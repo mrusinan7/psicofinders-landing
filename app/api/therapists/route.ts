@@ -5,17 +5,21 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+type Modality = 'inperson' | 'online' | 'hybrid'
+
+type RequiredKeys = 'name' | 'email' | 'city' | 'country' | 'colegiado' | 'langs'
+
 export async function GET() {
-  const okEnv = Boolean(
-    process.env.SUPABASE_URL &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY &&
-      process.env.SITE_URL
-  )
-  return NextResponse.json({ ok: true, env: okEnv ? 'ok' : 'missing' })
+  const hasSrv =
+    Boolean(process.env.SUPABASE_URL) &&
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const hasSite = Boolean(process.env.SITE_URL)
+  return NextResponse.json({ ok: true, env: { supabase: hasSrv, site: hasSite } })
 }
 
 export async function POST(req: Request) {
   try {
+    // Comprobación de env vars críticas
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json(
         { error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
@@ -23,114 +27,120 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json()
+    const raw = (await req.json()) as unknown
+    const body = (raw ?? {}) as Record<string, unknown>
 
-    // Validación mínima
-    const required = ['name', 'email', 'city', 'country', 'colegiado', 'langs'] as const
-    for (const k of required) {
-      if (!body?.[k] || (k === 'langs' && !Array.isArray(body.langs))) {
-        return NextResponse.json({ error: `Missing field: ${k}` }, { status: 400 })
+    // Validación mínima de campos requeridos
+    const required: RequiredKeys[] = ['name', 'email', 'city', 'country', 'colegiado', 'langs']
+    for (const key of required) {
+      if (key === 'langs') {
+        if (!Array.isArray(body.langs) || (body.langs as unknown[]).length === 0) {
+          return NextResponse.json({ error: `Missing field: ${key}` }, { status: 400 })
+        }
+      } else if (!body[key]) {
+        return NextResponse.json({ error: `Missing field: ${key}` }, { status: 400 })
       }
     }
 
-    const insert = {
-      name: String(body.name).slice(0, 200),
-      email: String(body.email).slice(0, 200),
-      phone: body.phone ? String(body.phone).slice(0, 50) : null,
-      city: String(body.city).slice(0, 120),
-      country: String(body.country).slice(0, 120),
-      colegiado: String(body.colegiado).slice(0, 120),
-      experience: body.experience ? Number(body.experience) : null,
-      website: body.website ? String(body.website).slice(0, 300) : null,
-      modality: ['inperson', 'online', 'hybrid'].includes(body.modality) ? body.modality : 'inperson',
-      langs: Array.isArray(body.langs) ? body.langs.map(String) : [],
-      approaches: Array.isArray(body.approaches) ? body.approaches.map(String) : [],
-      specialties: Array.isArray(body.specialties) ? body.specialties.map(String) : [],
-      price_min: body.priceMin ? Number(body.priceMin) : null,
-      price_max: body.priceMax ? Number(body.priceMax) : null,
-      availability: body.availability ?? null,
-      notes: body.notes ? String(body.notes) : null,
-      ui_lang: body.uiLang ?? 'es',
-      source: body.source ?? 'landing-pro-mvp',
-      submitted_at: new Date().toISOString(),
-    }
+    // Normalización segura
+    const name = String(body.name).slice(0, 200)
+    const email = String(body.email).slice(0, 200)
+    const phone = body.phone ? String(body.phone).slice(0, 50) : null
+    const city = String(body.city).slice(0, 120)
+    const country = String(body.country).slice(0, 120)
+    const colegiado = String(body.colegiado).slice(0, 120)
 
-    // 1) Guardar la solicitud (como antes)
+    const experience =
+      typeof body.experience === 'number'
+        ? body.experience
+        : typeof body.experience === 'string' && body.experience.trim() !== ''
+        ? Number(body.experience)
+        : null
+
+    const website = body.website ? String(body.website).slice(0, 300) : null
+
+    const modalityRaw = String(body.modality ?? 'inperson')
+    const modality: Modality = (['inperson', 'online', 'hybrid'] as const).includes(
+      modalityRaw as Modality
+    )
+      ? (modalityRaw as Modality)
+      : 'inperson'
+
+    const langs = Array.isArray(body.langs) ? body.langs.map((x) => String(x)) : []
+    const approaches = Array.isArray(body.approaches) ? body.approaches.map((x) => String(x)) : []
+    const specialties = Array.isArray(body.specialties) ? body.specialties.map((x) => String(x)) : []
+
+    const price_min =
+      typeof body.priceMin === 'number'
+        ? body.priceMin
+        : typeof body.priceMin === 'string' && body.priceMin.trim() !== ''
+        ? Number(body.priceMin)
+        : null
+
+    const price_max =
+      typeof body.priceMax === 'number'
+        ? body.priceMax
+        : typeof body.priceMax === 'string' && body.priceMax.trim() !== ''
+        ? Number(body.priceMax)
+        : null
+
+    const availability = 'availability' in body ? body.availability : null
+    const notes = body.notes ? String(body.notes) : null
+    const ui_lang = body.uiLang ? String(body.uiLang) : 'es'
+    const source = body.source ? String(body.source) : 'landing-pro-mvp'
+    const submitted_at = new Date().toISOString()
+
+    // 1) Guardar la solicitud en DB
     const { error: dbError } = await supabaseAdmin
       .from('therapist_applications')
-      .insert(insert)
+      .insert({
+        name,
+        email,
+        phone,
+        city,
+        country,
+        colegiado,
+        experience,
+        website,
+        modality,
+        langs,
+        approaches,
+        specialties,
+        price_min,
+        price_max,
+        availability,
+        notes,
+        ui_lang,
+        source,
+        submitted_at,
+      })
       .select('id')
       .single()
 
     if (dbError) {
-      console.error('/api/therapists supabase insert error', dbError)
+      console.error('/api/therapists insert error', dbError)
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // 2) Crear invitación y enviar el enlace con Resend (opcional)
-	if (process.env.AUTO_INVITE_PROS !== 'false') {
-	  const site = process.env.SITE_URL ?? ''
-	  const redirectTo = site ? `${site.replace(/\/$/, '')}/pro/onboarding` : undefined
+    // 2) Enviar invitación de Supabase (usando tu SMTP configurado en Auth → Email)
+    if (process.env.AUTO_INVITE_PROS !== 'false') {
+      const site = process.env.SITE_URL ?? ''
+      const redirectTo = site ? `${site.replace(/\/$/, '')}/pro/onboarding` : undefined
 
-	  // genera link de INVITE (crea el usuario y devuelve action_link)
-	  const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
-		type: 'invite',
-		email: insert.email,
-		options: {
-		  redirectTo,
-		  data: {
-			name: insert.name,
-			colegiado: insert.colegiado,
-			city: insert.city,
-			country: insert.country,
-			modality: insert.modality,
-			langs: insert.langs,
-			source: insert.source,
-		  },
-		},
-	  })
-
-	  if (linkErr) {
-		console.error('generateLink(invite) error', linkErr)
-	  } else {
-		const actionLink = (linkData?.properties as { action_link?: string } | null)?.action_link
-		const hasResend = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL)
-		if (actionLink && hasResend) {
-		  const { Resend } = await import('resend')
-		  const resend = new Resend(process.env.RESEND_API_KEY)
-		  const html = `
-			<div style="font-family:system-ui,Arial,sans-serif">
-			  <h2>¡Bienvenida/o a Psicofinders, ${insert.name}!</h2>
-			  <p>Activa tu cuenta y crea tu contraseña pulsando este botón:</p>
-			  <p><a href="${actionLink}" style="display:inline-block;padding:10px 16px;background:#000;color:#fff;border-radius:8px;text-decoration:none">Crear contraseña</a></p>
-			  <p>Si no puedes hacer clic, copia y pega esta URL:<br>${actionLink}</p>
-			</div>`
-		  const { error: resendErr } = await resend.emails.send({
-			from: process.env.FROM_EMAIL!,
-			to: insert.email,
-			subject: 'Activa tu cuenta de profesional en Psicofinders',
-			html,
-			text: `Activa tu cuenta: ${actionLink}`,
-		  })
-		  if (resendErr) console.error('Resend send error', resendErr)
-		} else {
-		  // c) Fallback: que lo envíe Supabase si no tenemos Resend configurado
-		  const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(insert.email, {
-			redirectTo,
-			data: {
-			  name: insert.name,
-			  colegiado: insert.colegiado,
-			  city: insert.city,
-			  country: insert.country,
-			  modality: insert.modality,
-			  langs: insert.langs,
-			  source: insert.source,
-			},
-		  })
-		  if (inviteErr) console.error('inviteUserByEmail error', inviteErr)
-		}
-	  }
-	}
+      const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: {
+          name,
+          colegiado,
+          city,
+          country,
+          modality,
+          langs,
+          source,
+        },
+      })
+      if (inviteErr) console.error('inviteUserByEmail error', inviteErr)
+    }
 
     return NextResponse.json({ ok: true }, { status: 201 })
   } catch (err: unknown) {
