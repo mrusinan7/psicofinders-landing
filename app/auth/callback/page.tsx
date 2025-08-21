@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function AuthCallback() {
+// Evita prerender y caché
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+function CallbackInner() {
   const [msg, setMsg] = useState('Completando inicio de sesión…')
   const router = useRouter()
   const sp = useSearchParams()
@@ -17,14 +21,12 @@ export default function AuthCallback() {
       return
     }
 
-    // Aseguramos PKCE en el cliente
     const supabase = createClient(url, anon, {
-      auth: { persistSession: true, flowType: 'pkce' }
+      auth: { persistSession: true, flowType: 'pkce' },
     })
 
     ;(async () => {
       try {
-        // Errores enviados por el proveedor/GoTrue
         const errParam = sp.get('error')
         const errDesc = sp.get('error_description')
         if (errParam) {
@@ -32,7 +34,7 @@ export default function AuthCallback() {
           return
         }
 
-        // PKCE moderno: ?code=...
+        // PKCE moderno (?code=...)
         const code = sp.get('code')
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code)
@@ -41,7 +43,7 @@ export default function AuthCallback() {
           return
         }
 
-        // Fallback: enlaces antiguos con tokens en el hash (#access_token=...)
+        // Fallback para enlaces con tokens en el hash
         if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
           const params = new URLSearchParams(window.location.hash.slice(1))
           const access_token = params.get('access_token') || ''
@@ -67,5 +69,20 @@ export default function AuthCallback() {
       <h1 className="text-xl font-semibold">Autenticación</h1>
       <p className="mt-3 text-gray-700">{msg}</p>
     </main>
+  )
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-md p-6">
+          <h1 className="text-xl font-semibold">Autenticación</h1>
+          <p className="mt-3 text-gray-700">Completando inicio de sesión…</p>
+        </main>
+      }
+    >
+      <CallbackInner />
+    </Suspense>
   )
 }
