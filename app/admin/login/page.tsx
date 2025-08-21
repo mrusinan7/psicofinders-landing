@@ -2,12 +2,16 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createHash } from 'node:crypto'
 
-export default function AdminLoginPage({
+// En Next 15, searchParams puede ser Promise<...>
+type SearchParams = Promise<Record<string, string | string[] | undefined>>
+
+export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams?: { err?: string }
+  searchParams?: SearchParams
 }) {
-  const err = searchParams?.err
+  const sp = (await searchParams) ?? {}
+  const err = typeof sp.err === 'string' ? sp.err : undefined
 
   // Server Action INLINE (no export)
   async function loginAction(formData: FormData) {
@@ -49,10 +53,3 @@ export default function AdminLoginPage({
           name="password"
           type="password"
           placeholder="••••••••"
-          className="rounded border px-3 py-2"
-        />
-        <button className="rounded bg-black px-4 py-2 text-white">Entrar</button>
-      </form>
-    </main>
-  )
-}
