@@ -124,23 +124,23 @@ export async function POST(req: Request) {
 
     // 2) Enviar invitación de Supabase (usando tu SMTP configurado en Auth → Email)
     if (process.env.AUTO_INVITE_PROS !== 'false') {
-      const site = process.env.SITE_URL ?? ''
-      const redirectTo = site ? `${site.replace(/\/$/, '')}/pro/onboarding` : undefined
+	  const site = process.env.SITE_URL ?? ''
+	  const redirectTo = site ? `${site.replace(/\/$/, '')}/auth/callback` : undefined
 
-      const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo,
-        data: {
-          name,
-          colegiado,
-          city,
-          country,
-          modality,
-          langs,
-          source,
-        },
-      })
-      if (inviteErr) console.error('inviteUserByEmail error', inviteErr)
-    }
+	  const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+		redirectTo,
+		data: {
+		  name,
+		  colegiado,
+		  city,
+		  country,
+		  modality,
+		  langs,
+		  source,
+		},
+	  })
+	  if (inviteErr) console.error('inviteUserByEmail error', inviteErr)
+	}
 
     return NextResponse.json({ ok: true }, { status: 201 })
   } catch (err: unknown) {
