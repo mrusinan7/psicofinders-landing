@@ -4,17 +4,19 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 
-// Evita SSG/ISR en Next 15 para esta ruta
+// (Opcional) fuerza que no se intente prerender estático
 export const dynamic = 'force-dynamic'
 
+type Modality = 'inperson' | 'online' | 'hybrid'
 type Therapist = {
   id: string
   name: string | null
   email: string | null
   colegiado: string | null
-  modality: 'inperson' | 'online' | 'hybrid' | null
+  modality: Modality | null
   price_min: number | null
   price_max: number | null
+  onboarding_complete?: boolean | null
 }
 
 export default function ProDashboard() {
@@ -24,33 +26,48 @@ export default function ProDashboard() {
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !anon) {
-      setErr('Faltan variables NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
-      setLoading(false)
-      return
-    }
+    const run = async () => {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!url || !anon) {
+        setErr('Faltan variables NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
+        setLoading(false)
+        return
+      }
 
-    const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
+      const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
 
-    ;(async () => {
-      // 1) Asegura sesión
+      // 1) Sesión
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/pro/login'); return }
+      if (!user) {
+        router.replace('/pro/login')
+        return
+      }
 
-      // 2) Carga perfil con RLS (cada pro solo su fila)
+      // 2) Perfil + bandera de onboarding (RLS: id = auth.uid())
       const { data, error } = await supabase
         .from('therapists')
-        .select('id,name,email,colegiado,modality,price_min,price_max')
+        .select('id,name,email,colegiado,modality,price_min,price_max,onboarding_complete')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (error) setErr(error.message)
-      else setMe((data as Therapist) ?? null)
+      if (error) {
+        setErr(error.message)
+        setLoading(false)
+        return
+      }
 
+      // 3) Si no ha completado onboarding, ir a onboarding
+      if (!data?.onboarding_complete) {
+        router.replace('/pro/onboarding')
+        return
+      }
+
+      setMe((data as Therapist) ?? null)
       setLoading(false)
-    })()
+    }
+
+    run()
   }, [router])
 
   async function signOut() {
@@ -64,14 +81,6 @@ export default function ProDashboard() {
 
   if (loading) return <main className="mx-auto max-w-2xl p-6">Cargando…</main>
   if (err) return <main className="mx-auto max-w-2xl p-6 text-red-700">Error: {err}</main>
-
-  const { data, error } = await supabase
-	.from('therapists')
-	.select('onboarding_complete, name, email, colegiado, modality, price_min, price_max')
-	.eq('id', user.id)
-	.maybeSingle()
-
-  if (!data?.onboarding_complete) { router.replace('/pro/onboarding'); return }
 
   return (
     <main className="mx-auto max-w-3xl p-6">
