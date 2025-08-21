@@ -1,25 +1,27 @@
+// app/api/therapists/route.ts
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 type Modality = 'inperson' | 'online' | 'hybrid'
-
 type RequiredKeys = 'name' | 'email' | 'city' | 'country' | 'colegiado' | 'langs'
 
+function normInt(x: unknown): number | null {
+  if (typeof x === 'number') return x
+  if (typeof x === 'string' && x.trim() !== '') return Number(x)
+  return null
+}
+
 export async function GET() {
-  const hasSrv =
-    Boolean(process.env.SUPABASE_URL) &&
-    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-  const hasSite = Boolean(process.env.SITE_URL)
-  return NextResponse.json({ ok: true, env: { supabase: hasSrv, site: hasSite } })
+  const envOk = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const siteOk = Boolean(process.env.SITE_URL)
+  return NextResponse.json({ ok: true, env: { supabase: envOk, site: siteOk } })
 }
 
 export async function POST(req: Request) {
   try {
-    // Comprobación de env vars críticas
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json(
         { error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
@@ -30,33 +32,26 @@ export async function POST(req: Request) {
     const raw = (await req.json()) as unknown
     const body = (raw ?? {}) as Record<string, unknown>
 
-    // Validación mínima de campos requeridos
+    // Requeridos
     const required: RequiredKeys[] = ['name', 'email', 'city', 'country', 'colegiado', 'langs']
-    for (const key of required) {
-      if (key === 'langs') {
+    for (const k of required) {
+      if (k === 'langs') {
         if (!Array.isArray(body.langs) || (body.langs as unknown[]).length === 0) {
-          return NextResponse.json({ error: `Missing field: ${key}` }, { status: 400 })
+          return NextResponse.json({ error: `Missing field: ${k}` }, { status: 400 })
         }
-      } else if (!body[key]) {
-        return NextResponse.json({ error: `Missing field: ${key}` }, { status: 400 })
+      } else if (!body[k]) {
+        return NextResponse.json({ error: `Missing field: ${k}` }, { status: 400 })
       }
     }
 
-    // Normalización segura
+    // Normalización
     const name = String(body.name).slice(0, 200)
     const email = String(body.email).slice(0, 200)
     const phone = body.phone ? String(body.phone).slice(0, 50) : null
     const city = String(body.city).slice(0, 120)
     const country = String(body.country).slice(0, 120)
     const colegiado = String(body.colegiado).slice(0, 120)
-
-    const experience =
-      typeof body.experience === 'number'
-        ? body.experience
-        : typeof body.experience === 'string' && body.experience.trim() !== ''
-        ? Number(body.experience)
-        : null
-
+    const experience = normInt(body.experience)
     const website = body.website ? String(body.website).slice(0, 300) : null
 
     const modalityRaw = String(body.modality ?? 'inperson')
@@ -70,19 +65,8 @@ export async function POST(req: Request) {
     const approaches = Array.isArray(body.approaches) ? body.approaches.map((x) => String(x)) : []
     const specialties = Array.isArray(body.specialties) ? body.specialties.map((x) => String(x)) : []
 
-    const price_min =
-      typeof body.priceMin === 'number'
-        ? body.priceMin
-        : typeof body.priceMin === 'string' && body.priceMin.trim() !== ''
-        ? Number(body.priceMin)
-        : null
-
-    const price_max =
-      typeof body.priceMax === 'number'
-        ? body.priceMax
-        : typeof body.priceMax === 'string' && body.priceMax.trim() !== ''
-        ? Number(body.priceMax)
-        : null
+    const price_min = normInt(body.priceMin)
+    const price_max = normInt(body.priceMax)
 
     const availability = 'availability' in body ? body.availability : null
     const notes = body.notes ? String(body.notes) : null
@@ -90,7 +74,7 @@ export async function POST(req: Request) {
     const source = body.source ? String(body.source) : 'landing-pro-mvp'
     const submitted_at = new Date().toISOString()
 
-    // 1) Guardar la solicitud en DB
+    // 1) Guardar solicitud
     const { error: dbError } = await supabaseAdmin
       .from('therapist_applications')
       .insert({
@@ -122,27 +106,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // 2) Enviar invitación de Supabase (usando tu SMTP configurado en Auth → Email)
+    // 2) Invitación / Magic link
+    let invited: 'invite' | 'otp' | 'skipped' = 'skipped'
     if (process.env.AUTO_INVITE_PROS !== 'false') {
-	  const site = process.env.SITE_URL ?? ''
-	  const redirectTo = site ? `${site.replace(/\/$/, '')}/auth/callback` : undefined
+      const site = process.env.SITE_URL ?? ''
+      const redirectTo = site ? `${site.replace(/\/$/, '')}/auth/callback` : undefined
 
-	  const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-		redirectTo,
-		data: {
-		  name,
-		  colegiado,
-		  city,
-		  country,
-		  modality,
-		  langs,
-		  source,
-		},
-	  })
-	  if (inviteErr) console.error('inviteUserByEmail error', inviteErr)
-	}
+      // a) Invitar (crea usuario si no existe y envía correo con tu SMTP)
+      const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: { name, colegiado, city, country, modality, langs, source },
+      })
 
-    return NextResponse.json({ ok: true }, { status: 201 })
+      if (!inviteErr) {
+        invited = 'invite'
+      } else {
+        // Si ya existe, hacemos fallback a magic link (OTP) para que reciba email igualmente
+        const msg = inviteErr.message ?? ''
+        const already =
+          /already/i.test(msg) ||
+          /exist/i.test(msg) ||
+          /registered/i.test(msg) ||
+          /User already registered/i.test(msg)
+
+        if (already) {
+          const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: redirectTo },
+          })
+          if (otpErr) {
+            console.error('signInWithOtp error', otpErr)
+          } else {
+            invited = 'otp'
+          }
+        } else {
+          console.error('inviteUserByEmail error', inviteErr)
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true, invited }, { status: 201 })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('/api/therapists server error', err)
