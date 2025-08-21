@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useRouter, useSearchParams } from 'next/navigation'
 
+// Evitar SSG/ISR
 export const dynamic = 'force-dynamic'
 
 function CallbackInner() {
@@ -18,31 +19,32 @@ function CallbackInner() {
       setMsg('Faltan variables NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
       return
     }
-    const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
+
+    const supabase = createClient(url, anon, {
+      auth: { persistSession: true } // soporta PKCE e implicit
+    })
 
     ;(async () => {
       try {
+        // 1) Errores directos en la URL
         const errParam = sp.get('error')
         const errDesc = sp.get('error_description')
-        if (errParam) { setMsg(`Error: ${errDesc || errParam}`); return }
+        if (errParam) throw new Error(errDesc || errParam)
 
+        // 2) PKCE (?code=...)
         const code = sp.get('code')
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code)
           if (error) throw error
-        } else if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
-          const params = new URLSearchParams(window.location.hash.slice(1))
-          const access_token = params.get('access_token') || ''
-          const refresh_token = params.get('refresh_token') || ''
-          if (access_token && refresh_token) {
-            const { error } = await supabase.auth.setSession({ access_token, refresh_token })
-            if (error) throw error
-          }
+        } else {
+          // 3) Enlaces con fragmento (#access_token=...) → usa el helper oficial
+          const { error } = await supabase.auth.getSessionFromUrl({ storeSession: true })
+          if (error) throw error
         }
 
-        // decidir a dónde ir
+        // 4) Decide destino según onboarding
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { router.replace('/pro/login'); return }
+        if (!user) throw new Error('No se pudo crear la sesión')
 
         const { data, error } = await supabase
           .from('therapists')
@@ -54,9 +56,11 @@ function CallbackInner() {
 
         const complete = data?.onboarding_complete === true
         router.replace(complete ? '/pro/dashboard' : '/pro/onboarding')
-      } catch (e) {
-        const m = e instanceof Error ? e.message : String(e)
-        setMsg(`Error al completar el inicio de sesión: ${m}`)
+      } catch (e: unknown) {
+        // Mensaje legible
+        const any = e as { message?: string; error_description?: string }
+        const pretty = any?.message || any?.error_description || JSON.stringify(e)
+        setMsg(`Error al completar el inicio de sesión: ${pretty}`)
       }
     })()
   }, [router, sp])
@@ -71,12 +75,14 @@ function CallbackInner() {
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={
-      <main className="mx-auto max-w-md p-6">
-        <h1 className="text-xl font-semibold">Autenticación</h1>
-        <p className="mt-3 text-gray-700">Completando inicio de sesión…</p>
-      </main>
-    }>
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-md p-6">
+          <h1 className="text-xl font-semibold">Autenticación</h1>
+          <p className="mt-3 text-gray-700">Completando inicio de sesión…</p>
+        </main>
+      }
+    >
       <CallbackInner />
     </Suspense>
   )
