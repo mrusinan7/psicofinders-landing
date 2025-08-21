@@ -236,22 +236,22 @@ export default function TherapistSignupLanding() {
           <div className="rounded-2xl border bg-white p-4 shadow-sm">
             <div className="mb-2 text-xs font-semibold text-gray-500">Paso 1</div>
             <div className="text-base font-semibold">Cuestionario del paciente</div>
-            <p className="mt-1 text-sm text-gray-600">Motivo de consulta, idioma, modalidad, franja horaria y rango de honorarios.</p>
+            <p className="mt-1 text-sm text-gray-600">Mediante un extenso cuestionario obtenemos las necesidades del paciente.</p>
           </div>
           <div className="rounded-2xl border bg-white p-4 shadow-sm">
             <div className="mb-2 text-xs font-semibold text-gray-500">Paso 2</div>
             <div className="text-base font-semibold">Matching ético y logístico</div>
-            <p className="mt-1 text-sm text-gray-600">Filtramos por colegiación, especialidad, idiomas, agenda y presupuesto.</p>
+            <p className="mt-1 text-sm text-gray-600">Con nuestro algoritmo especialmente pensado para el sector, proponemos al paciente diferentes opciones de profesional que puede atenderle.</p>
           </div>
           <div className="rounded-2xl border bg-white p-4 shadow-sm">
             <div className="mb-2 text-xs font-semibold text-gray-500">Paso 3</div>
-            <div className="text-base font-semibold">Revisión y verificación</div>
-            <p className="mt-1 text-sm text-gray-600">Validamos nº de colegiado y requisitos mínimos de práctica segura.</p>
+            <div className="text-base font-semibold">Contacto con el profesional</div>
+            <p className="mt-1 text-sm text-gray-600">Los pacientes obtienen las diferentes formas de comunicarse con el psicólogo que haya elegido.</p>
           </div>
           <div className="rounded-2xl border bg-white p-4 shadow-sm">
             <div className="mb-2 text-xs font-semibold text-gray-500">Paso 4</div>
-            <div className="text-base font-semibold">Contacto</div>
-            <p className="mt-1 text-sm text-gray-600">Recibes la solicitud y decides aceptar o no el caso según tu criterio.</p>
+            <div className="text-base font-semibold">Primera visita</div>
+            <p className="mt-1 text-sm text-gray-600">Acordais con el paciente cuando realizar la primera visita.</p>
           </div>
         </div>
       </section>
@@ -279,7 +279,7 @@ export default function TherapistSignupLanding() {
       <section id="form" className="mx-auto w-full max-w-5xl rounded-3xl border bg-white px-4 py-8 shadow-sm md:px-8">
         <h2 className="text-2xl font-bold">Alta de profesionales</h2>
         <p className="mt-1 text-sm text-gray-600">
-          Psicofinders no presta servicios de emergencia ni realiza diagnóstico clínico. En caso de urgencia, llama al 112.
+          El alta de profesionales es totalmente gratuito. Una vez creado el perfil podrás modificarlo más adelante.  
         </p>
 
         <form ref={formRef} className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
