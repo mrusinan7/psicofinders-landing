@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 
 // ========= Types =========
 export type UiLang = 'es' | 'ca' | 'en' | 'fr'
@@ -372,34 +372,38 @@ function Textarea({ label, requiredLabel, ...props }: TextareaProps) {
   )
 }
 
+const INITIAL_FORM: FormState = {
+  name: '',
+  email: '',
+  phone: '',
+  city: '',
+  country: 'España',
+  colegiado: '',
+  experience: '',
+  website: '',
+  modality: 'inperson',
+  langs: ['es'],
+  approaches: [],
+  specialties: [],
+  priceMin: '',
+  priceMax: '',
+  availability: { mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false, from: '09:00', to: '19:00' },
+  notes: '',
+  consent: false,
+  honey: '',
+}
+
+
 export default function TherapistSignupLanding() {
   const [uiLang, setUiLang] = useState<UiLang>('es')
   const t = I18N[uiLang]
 
   const dayKeys: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
-  const [form, setForm] = useState<FormState>({
-    name: '',
-    email: '',
-    phone: '',
-    city: '',
-    country: 'España',
-    colegiado: '',
-    experience: '',
-    website: '',
-    modality: 'inperson',
-    langs: ['es'],
-    approaches: [],
-    specialties: [],
-    priceMin: '',
-    priceMax: '',
-    availability: { mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false, from: '09:00', to: '19:00' },
-    notes: '',
-    consent: false,
-    honey: '',
-  })
+  const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [status, setStatus] = useState<'idle' | 'ok' | 'err'>('idle')
-
+  const formRef = useRef<HTMLFormElement>(null)
+  
   const handleChange = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
@@ -414,22 +418,26 @@ export default function TherapistSignupLanding() {
       if (key === 'langs') {
         const list = new Set(f.langs)
         const v = value as LangKey
-        list.has(v) ? list.delete(v) : list.add(v)
+        if (list.has(v)) list.delete(v)
+        else list.add(v)
         return { ...f, langs: Array.from(list) }
       }
       if (key === 'approaches') {
         const list = new Set(f.approaches)
         const v = value as string
-        list.has(v) ? list.delete(v) : list.add(v)
+        if (list.has(v)) list.delete(v)
+        else list.add(v)
         return { ...f, approaches: Array.from(list) }
       }
-      // key === 'specialties'
+      // specialties
       const list = new Set(f.specialties)
       const v = value as string
-      list.has(v) ? list.delete(v) : list.add(v)
+      if (list.has(v)) list.delete(v)
+      else list.add(v)
       return { ...f, specialties: Array.from(list) }
     })
-  }
+}
+
 
   const isValid = useMemo(() => {
     if (!form.name || !form.email || !form.city || !form.country || !form.colegiado) return false
@@ -463,11 +471,13 @@ export default function TherapistSignupLanding() {
       throw new Error(data?.error || `HTTP ${res.status}`)
     }
     setStatus('ok')
-    e.currentTarget.reset()
+    // Reset UI de forma segura
+    formRef.current?.reset()
+    setForm(INITIAL_FORM)
   } catch (err) {
     console.error(err)
     setStatus('err')
-    alert(`No se pudo enviar: ${String((err as Error).message)}`)
+    alert(`No se pudo enviar: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -538,7 +548,7 @@ export default function TherapistSignupLanding() {
         <h2 className="text-2xl font-bold">{t.formTitle}</h2>
         <p className="mt-1 text-sm text-gray-600">{t.labels.nonEmergency}</p>
 
-        <form className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
+        <form ref={formRef} className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
           {/* honeypot */}
           <input
             type="text"
