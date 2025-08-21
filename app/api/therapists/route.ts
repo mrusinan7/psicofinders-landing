@@ -8,8 +8,8 @@ export const revalidate = 0
 export async function GET() {
   const okEnv = Boolean(
     process.env.SUPABASE_URL &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY &&
-    process.env.SITE_URL
+      process.env.SUPABASE_SERVICE_ROLE_KEY &&
+      process.env.SITE_URL
   )
   return NextResponse.json({ ok: true, env: okEnv ? 'ok' : 'missing' })
 }
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       submitted_at: new Date().toISOString(),
     }
 
-    // 1) Guardar la solicitud
+    // 1) Guardar la solicitud (como antes)
     const { error: dbError } = await supabaseAdmin
       .from('therapist_applications')
       .insert(insert)
@@ -67,33 +67,60 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // 2) (Opcional) Invitar automáticamente a crear contraseña y acceder al área privada
+    // 2) Crear/registrar el usuario generando un link de "signup"
     if (process.env.AUTO_INVITE_PROS !== 'false') {
       const site = process.env.SITE_URL ?? ''
-      const redirectTo = site ? `${site}/pro/onboarding` : undefined
+      const redirectTo = site ? `${site.replace(/\/$/, '')}/pro/onboarding` : undefined
 
-      const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(insert.email, {
-        // redirige tras aceptar la invitación
-        redirectTo,
-        // metadatos útiles para pre-rellenar el onboarding
-        data: {
-          name: insert.name,
-          colegiado: insert.colegiado,
-          city: insert.city,
-          country: insert.country,
-          modality: insert.modality,
-          langs: insert.langs,
-          source: insert.source,
+      // Esto CREA el usuario (estado: no confirmado) y devuelve el enlace de alta
+      const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'signup',
+        email: insert.email,
+        options: {
+          redirectTo,
+          data: {
+            name: insert.name,
+            colegiado: insert.colegiado,
+            city: insert.city,
+            country: insert.country,
+            modality: insert.modality,
+            langs: insert.langs,
+            source: insert.source,
+          },
         },
       })
 
-      if (inviteError) {
-        const msg = inviteError.message ?? ''
-        // Si el usuario ya existe, no consideramos esto como error fatal
-        const already = /already.*(registered|exist)/i.test(msg)
-        if (!already) {
-          console.error('inviteUserByEmail error', inviteError)
-          // No rompemos el flujo del alta
+      if (linkErr) {
+        console.error('generateLink(signup) error', linkErr)
+        // seguimos sin romper el alta
+      } else {
+        const actionLink = (linkData?.properties as { action_link?: string } | null)?.action_link
+        // 3) Si tienes Resend configurado, enviamos nosotros el email (entregabilidad top)
+        const hasResend = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL)
+        if (actionLink && hasResend) {
+          try {
+            const { Resend } = await import('resend')
+            const resend = new Resend(process.env.RESEND_API_KEY)
+
+            const html =
+              `<div style="font-family:system-ui,Arial,sans-serif">
+                <h2>¡Bienvenida/o a Psicofinders, ${insert.name}!</h2>
+                <p>Para activar tu cuenta y crear tu contraseña, pulsa este botón:</p>
+                <p><a href="${actionLink}" style="display:inline-block;padding:10px 16px;background:#000;color:#fff;border-radius:8px;text-decoration:none">Crear contraseña</a></p>
+                <p>Si no puedes hacer clic, copia y pega esta URL:<br>${actionLink}</p>
+              </div>`
+
+            const { error: resendErr } = await resend.emails.send({
+              from: process.env.FROM_EMAIL!,
+              to: insert.email,
+              subject: 'Activa tu cuenta de profesional en Psicofinders',
+              html,
+              text: `Activa tu cuenta: ${actionLink}`,
+            })
+            if (resendErr) console.error('Resend send error', resendErr)
+          } catch (e) {
+            console.error('Resend import/send failed', e)
+          }
         }
       }
     }
