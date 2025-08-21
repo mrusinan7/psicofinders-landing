@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createHash } from 'node:crypto'
+import { createHash } from 'crypto'
 
 // En Next 15, searchParams puede ser Promise<...>
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -52,4 +52,11 @@ export default async function AdminLoginPage({
         <input
           name="password"
           type="password"
-          placeholder="••••••••"
+          placeholder="********"
+          className="rounded border px-3 py-2"
+        />
+        <button className="rounded bg-black px-4 py-2 text-white">Entrar</button>
+      </form>
+    </main>
+  )
+}
