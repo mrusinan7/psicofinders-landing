@@ -16,10 +16,15 @@ export default function AuthCallback() {
       setMsg('Faltan variables NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
       return
     }
-    const supabase = createClient(url, anon, { auth: { persistSession: true } })
+
+    // Aseguramos PKCE en el cliente
+    const supabase = createClient(url, anon, {
+      auth: { persistSession: true, flowType: 'pkce' }
+    })
 
     ;(async () => {
       try {
+        // Errores enviados por el proveedor/GoTrue
         const errParam = sp.get('error')
         const errDesc = sp.get('error_description')
         if (errParam) {
@@ -27,19 +32,18 @@ export default function AuthCallback() {
           return
         }
 
-        // Flujo PKCE (parámetro ?code=...)
+        // PKCE moderno: ?code=...
         const code = sp.get('code')
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession({ code })
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
           if (error) throw error
           router.replace('/pro/onboarding')
           return
         }
 
-        // Fallback para enlaces antiguos con tokens en el hash (#access_token=...)
-        const hash = typeof window !== 'undefined' ? window.location.hash : ''
-        if (hash?.includes('access_token')) {
-          const params = new URLSearchParams(hash.replace(/^#/, ''))
+        // Fallback: enlaces antiguos con tokens en el hash (#access_token=...)
+        if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+          const params = new URLSearchParams(window.location.hash.slice(1))
           const access_token = params.get('access_token') || ''
           const refresh_token = params.get('refresh_token') || ''
           if (access_token && refresh_token) {
