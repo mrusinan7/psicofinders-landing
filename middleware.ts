@@ -4,8 +4,8 @@ import { NextResponse } from 'next/server'
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Permitir la pantalla de login y su route handler de autorización
-  if (pathname.startsWith('/admin/login')) {
+  // permitir /admin/login y subrutas (p. ej. /admin/login/authorize)
+  if (pathname.startsWith('/admin/login') || pathname === '/admin/logout') {
     return NextResponse.next()
   }
 
@@ -23,6 +23,4 @@ export function middleware(req: NextRequest) {
   return NextResponse.next()
 }
 
-export const config = {
-  matcher: ['/admin/:path*'],
-}
+export const config = { matcher: ['/admin/:path*'] }
