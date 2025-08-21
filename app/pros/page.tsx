@@ -450,22 +450,27 @@ export default function TherapistSignupLanding() {
   )
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!isValid) return
-    try {
-      const res = await fetch(FORM_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('Bad response')
-      setStatus('ok')
-      e.currentTarget.reset()
-    } catch (err) {
-      console.error(err)
-      setStatus('err')
+  e.preventDefault()
+  if (!isValid) return
+  try {
+    const res = await fetch(FORM_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data?.error || `HTTP ${res.status}`)
     }
+    setStatus('ok')
+    e.currentTarget.reset()
+  } catch (err) {
+    console.error(err)
+    setStatus('err')
+    alert(`No se pudo enviar: ${String((err as Error).message)}`)
   }
+}
+
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-white to-gray-50 text-gray-900">

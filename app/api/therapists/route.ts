@@ -3,8 +3,22 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 
+// Pequeño ping para probar rápido en /api/therapists (GET)
+export async function GET() {
+  const okEnv = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  return NextResponse.json({ ok: true, env: okEnv ? 'ok' : 'missing' })
+}
+
 export async function POST(req: Request) {
   try {
+    // Comprobación de env vars (para errores típicos de Vercel)
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
+        { status: 500 }
+      )
+    }
+
     const body = await req.json()
 
     // Validación mínima
@@ -39,12 +53,20 @@ export async function POST(req: Request) {
       submitted_at: new Date().toISOString(),
     }
 
-    const { error } = await supabaseAdmin.from('therapist_applications').insert(insert)
-    if (error) throw error
+    const { error } = await supabaseAdmin
+      .from('therapist_applications')
+      .insert(insert)
+      .select('id') // fuerza a Supabase a responder con más detalle
+
+    if (error) {
+      console.error('/api/therapists supabase error', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true }, { status: 201 })
-  } catch (err) {
-    console.error('/api/therapists error', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  } catch (err: any) {
+    console.error('/api/therapists server error', err)
+    // Si el body no es JSON, capturamos el error aquí
+    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 })
   }
 }
