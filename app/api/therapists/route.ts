@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 
-// Pequeño ping para probar rápido en /api/therapists (GET)
+// Ping rápido para probar el endpoint y las env vars
 export async function GET() {
   const okEnv = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
   return NextResponse.json({ ok: true, env: okEnv ? 'ok' : 'missing' })
@@ -11,7 +11,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    // Comprobación de env vars (para errores típicos de Vercel)
+    // Comprobación de env vars
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json(
         { error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     // Validación mínima
-    const required = ['name', 'email', 'city', 'country', 'colegiado', 'langs']
+    const required = ['name', 'email', 'city', 'country', 'colegiado', 'langs'] as const
     for (const k of required) {
       if (!body?.[k] || (k === 'langs' && !Array.isArray(body.langs))) {
         return NextResponse.json({ error: `Missing field: ${k}` }, { status: 400 })
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const { error } = await supabaseAdmin
       .from('therapist_applications')
       .insert(insert)
-      .select('id') // fuerza a Supabase a responder con más detalle
+      .select('id')
 
     if (error) {
       console.error('/api/therapists supabase error', error)
@@ -64,9 +64,10 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true }, { status: 201 })
-  } catch (err: any) {
+  } catch (err: unknown) {
+    // <-- aquí el cambio: 'unknown' y estrechamos el tipo
+    const message = err instanceof Error ? err.message : String(err)
     console.error('/api/therapists server error', err)
-    // Si el body no es JSON, capturamos el error aquí
-    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
