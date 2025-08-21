@@ -4,9 +4,8 @@ import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-// Evita prerender y caché
+// Forzamos que no se prerenderice como estática
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 function CallbackInner() {
   const [msg, setMsg] = useState('Completando inicio de sesión…')
@@ -34,7 +33,6 @@ function CallbackInner() {
           return
         }
 
-        // PKCE moderno (?code=...)
         const code = sp.get('code')
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code)
@@ -43,7 +41,6 @@ function CallbackInner() {
           return
         }
 
-        // Fallback para enlaces con tokens en el hash
         if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
           const params = new URLSearchParams(window.location.hash.slice(1))
           const access_token = params.get('access_token') || ''
