@@ -1,4 +1,3 @@
-// app/api/therapists/route.ts
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -32,7 +31,7 @@ export async function POST(req: Request) {
     const raw = (await req.json()) as unknown
     const body = (raw ?? {}) as Record<string, unknown>
 
-    // Requeridos
+    // Validación mínima
     const required: RequiredKeys[] = ['name', 'email', 'city', 'country', 'colegiado', 'langs']
     for (const k of required) {
       if (k === 'langs') {
@@ -106,13 +105,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // 2) Invitación / Magic link
-    let invited: 'invite' | 'otp' | 'skipped' = 'skipped'
+    // 2) Invitación / fallback
+    let invited: 'invite' | 'otp' | 'skipped' | 'error' = 'skipped'
+    let detail: string | undefined
+    let actionLink: string | undefined
+
     if (process.env.AUTO_INVITE_PROS !== 'false') {
       const site = process.env.SITE_URL ?? ''
       const redirectTo = site ? `${site.replace(/\/$/, '')}/auth/callback` : undefined
 
-      // a) Invitar (crea usuario si no existe y envía correo con tu SMTP)
+      // a) Intento principal: INVITE (crea usuario + email por tu SMTP)
       const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
         data: { name, colegiado, city, country, modality, langs, source },
@@ -121,31 +123,41 @@ export async function POST(req: Request) {
       if (!inviteErr) {
         invited = 'invite'
       } else {
-        // Si ya existe, hacemos fallback a magic link (OTP) para que reciba email igualmente
-        const msg = inviteErr.message ?? ''
-        const already =
-          /already/i.test(msg) ||
-          /exist/i.test(msg) ||
-          /registered/i.test(msg) ||
-          /User already registered/i.test(msg)
+        detail = `inviteUserByEmail: ${inviteErr.message}`
 
-        if (already) {
-          const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({
-            email,
-            options: { emailRedirectTo: redirectTo },
-          })
-          if (otpErr) {
-            console.error('signInWithOtp error', otpErr)
-          } else {
-            invited = 'otp'
-          }
+        // b) Fallback universal: MAGIC LINK (crea usuario si no existe y envía email)
+        const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: redirectTo },
+        })
+        if (!otpErr) {
+          invited = 'otp'
         } else {
-          console.error('inviteUserByEmail error', inviteErr)
+          detail += ` | signInWithOtp: ${otpErr.message}`
+
+          // c) Último recurso: generar action_link (sin enviar) para depurar
+          const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+            type: 'invite',
+            email,
+            options: { redirectTo },
+          })
+          if (!linkErr) {
+            actionLink = (linkData?.properties as { action_link?: string } | null)?.action_link
+          } else {
+            detail += ` | generateLink(invite): ${linkErr.message}`
+          }
+
+          invited = 'error'
         }
       }
     }
 
-    return NextResponse.json({ ok: true, invited }, { status: 201 })
+    const debugPayload =
+      process.env.DEBUG_INVITES === 'true'
+        ? { detail, actionLink }
+        : undefined
+
+    return NextResponse.json({ ok: true, invited, debug: debugPayload }, { status: 201 })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('/api/therapists server error', err)
