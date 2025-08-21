@@ -113,10 +113,24 @@ export async function POST(req: Request) {
 			text: `Activa tu cuenta: ${actionLink}`,
 		  })
 		  if (resendErr) console.error('Resend send error', resendErr)
+		} else {
+		  // c) Fallback: que lo envíe Supabase si no tenemos Resend configurado
+		  const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(insert.email, {
+			redirectTo,
+			data: {
+			  name: insert.name,
+			  colegiado: insert.colegiado,
+			  city: insert.city,
+			  country: insert.country,
+			  modality: insert.modality,
+			  langs: insert.langs,
+			  source: insert.source,
+			},
+		  })
+		  if (inviteErr) console.error('inviteUserByEmail error', inviteErr)
 		}
 	  }
 	}
-
 
     return NextResponse.json({ ok: true }, { status: 201 })
   } catch (err: unknown) {
