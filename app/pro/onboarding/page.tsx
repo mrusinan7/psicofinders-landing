@@ -7,125 +7,156 @@ import { useRouter } from 'next/navigation'
 export const dynamic = 'force-dynamic'
 
 type Modality = 'online' | 'inperson' | 'hybrid'
+type Meta = Partial<{
+  name: string
+  colegiado: string
+  modality: Modality
+  langs: string[]
+  city: string
+  country: string
+}>
 
-export default function ProOnboardingPage() {
+export default function ProOnboardingSetPassword() {
   const router = useRouter()
-
-  // Campos mínimos del onboarding
-  const [name, setName] = useState('')
-  const [colegiado, setColegiado] = useState('')
-  const [modality, setModality] = useState<Modality>('online')
-  const [langs, setLangs] = useState<string[]>(['es'])
-
-  // Estado UI
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('Preparando tu cuenta…')
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Cargar datos iniciales / redirecciones
+  // Datos que vienen del formulario inicial (NO editables aquí)
+  const [seed, setSeed] = useState<{
+    name: string
+    colegiado: string
+    modality: Modality
+    langs: string[]
+    city: string
+    country: string
+  } | null>(null)
+
+  // Formulario de contraseña
+  const [p1, setP1] = useState('')
+  const [p2, setP2] = useState('')
+  const [saving, setSaving] = useState(false)
+
   useEffect(() => {
     const run = async () => {
       try {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL
         const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        if (!url || !anon) {
-          setError('Faltan variables NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
-          setLoading(false)
-          return
-        }
+        if (!url || !anon) throw new Error('Faltan variables públicas de Supabase')
 
         const supabase = createClient(url, anon, {
           auth: { persistSession: true, flowType: 'pkce' },
         })
 
-        // 1) Asegurar sesión
+        // 1) Sesión
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.replace('/pro/login')
-          return
-        }
+        if (!user) { router.replace('/pro/login'); return }
 
-        // 2) Intentar precargar perfil si existe
-        const { data, error: selectErr } = await supabase
+        // 2) Si ya está completo → panel
+        const { data: profile } = await supabase
           .from('therapists')
-          .select('name, colegiado, modality, langs, onboarding_complete')
+          .select('onboarding_complete')
           .eq('id', user.id)
           .maybeSingle()
 
-        if (selectErr && selectErr.code !== 'PGRST116') { // ignora "no rows"
-          setError(selectErr.message)
-          setLoading(false)
-          return
+        if (profile?.onboarding_complete) { router.replace('/pro/dashboard'); return }
+
+        // 3) Construir “semilla” desde user_metadata o última solicitud por email
+        const meta = (user.user_metadata || {}) as Meta
+        let name = meta.name ?? ''
+        let colegiado = meta.colegiado ?? ''
+        let modality: Modality | undefined = meta.modality
+        let langs: string[] | undefined = Array.isArray(meta.langs) ? meta.langs : undefined
+        let city = meta.city ?? ''
+        let country = meta.country ?? ''
+
+        const needMore =
+          !name || !colegiado || !modality || !(langs && langs.length) || !city || !country
+
+        if (needMore && user.email) {
+          const { data: app } = await supabase
+            .from('therapist_applications')
+            .select('name, colegiado, modality, langs, city, country')
+            .eq('email', user.email)
+            .order('submitted_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (app) {
+            if (!name && app.name) name = app.name
+            if (!colegiado && app.colegiado) colegiado = app.colegiado
+            if (!modality && app.modality && ['online','inperson','hybrid'].includes(app.modality)) {
+              modality = app.modality as Modality
+            }
+            if ((!langs || !langs.length) && Array.isArray(app.langs) && app.langs.length) {
+              langs = app.langs as string[]
+            }
+            if (!city && app.city) city = app.city
+            if (!country && app.country) country = app.country
+          }
         }
 
-        if (data) {
-          if (data.onboarding_complete) {
-            router.replace('/pro/dashboard')
-            return
-          }
-          if (data.name) setName(data.name)
-          if (data.colegiado) setColegiado(data.colegiado)
-          if (data.modality && ['online','inperson','hybrid'].includes(data.modality)) {
-            setModality(data.modality as Modality)
-          }
-          if (Array.isArray(data.langs) && data.langs.length > 0) {
-            setLangs(data.langs as string[])
-          }
-        }
+        // Defaults seguros
+        if (!modality) modality = 'online'
+        if (!langs || !langs.length) langs = ['es']
 
+        setSeed({
+          name,
+          colegiado,
+          modality,
+          langs,
+          city,
+          country,
+        })
         setLoading(false)
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        setError(msg)
+        setError(e instanceof Error ? e.message : String(e))
         setLoading(false)
       }
     }
-
     run()
   }, [router])
 
-  function toggleLang(code: string) {
-    setLangs((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]))
-  }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true)
-    setError(null)
+    if (!seed) return
+    setSaving(true); setError(null)
 
     try {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      if (!url || !anon) throw new Error('Faltan variables públicas de Supabase')
+      if (p1.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.')
+      if (p1 !== p2) throw new Error('Las contraseñas no coinciden.')
 
-      const supabase = createClient(url, anon, {
-        auth: { persistSession: true, flowType: 'pkce' },
-      })
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.replace('/pro/login')
-        return
-      }
+      if (!user) { router.replace('/pro/login'); return }
 
-      // Upsert con RLS (id = auth.uid())
+      // 1) Establecer contraseña para el usuario actual (requiere Email+Password habilitado)
+      const { error: pwErr } = await supabase.auth.updateUser({ password: p1 })
+      if (pwErr) throw pwErr
+
+      // 2) Crear/actualizar el perfil con la semilla y marcar onboarding_complete
       const { error: upsertErr } = await supabase
         .from('therapists')
         .upsert(
           {
-            id: user.id,
+            id: user.id,                         // RLS: id = auth.uid()
             email: user.email ?? undefined,
-            name,
-            colegiado,
-            modality,
-            langs,
+            name: seed.name,
+            colegiado: seed.colegiado,
+            modality: seed.modality,
+            langs: seed.langs,
+            city: seed.city,
+            country: seed.country,
             onboarding_complete: true,
           },
           { onConflict: 'id' }
         )
-
       if (upsertErr) throw upsertErr
 
+      // 3) Al panel
       router.replace('/pro/dashboard')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -135,15 +166,13 @@ export default function ProOnboardingPage() {
     }
   }
 
-  if (loading) {
-    return <main className="mx-auto max-w-xl p-6">Cargando…</main>
-  }
+  if (loading) return <main className="mx-auto max-w-xl p-6">Cargando…</main>
 
   return (
     <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-2xl font-bold">Completa tu perfil</h1>
+      <h1 className="text-2xl font-bold">Crea tu contraseña</h1>
       <p className="mt-2 text-gray-600">
-        Estos datos mínimos nos permiten publicar tu ficha y empezar a enviarte pacientes.
+        Tu cuenta ya está verificada. Crea una contraseña para acceder cuando quieras.
       </p>
 
       {error && (
@@ -152,64 +181,40 @@ export default function ProOnboardingPage() {
         </div>
       )}
 
+      {/* Resumen de datos (solo lectura) */}
+      {seed && (
+        <div className="mt-5 rounded-lg border p-3 text-sm text-gray-700">
+          <p><strong>Nombre:</strong> {seed.name || '—'}</p>
+          <p><strong>Colegiado:</strong> {seed.colegiado || '—'}</p>
+          <p><strong>Modalidad:</strong> {seed.modality}</p>
+          <p><strong>Idiomas:</strong> {seed.langs.join(', ')}</p>
+          <p><strong>Ciudad/Pais:</strong> {seed.city || '—'} {seed.country || ''}</p>
+        </div>
+      )}
+
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Nombre y apellidos</label>
+          <label className="mb-1 block text-sm font-medium">Contraseña</label>
           <input
+            type="password"
             className="w-full rounded border px-3 py-2"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ej. María López Pérez"
+            value={p1}
+            onChange={(e) => setP1(e.target.value)}
+            minLength={8}
             required
           />
         </div>
-
         <div>
-          <label className="mb-1 block text-sm font-medium">Nº de colegiado/a</label>
+          <label className="mb-1 block text-sm font-medium">Repite la contraseña</label>
           <input
+            type="password"
             className="w-full rounded border px-3 py-2"
-            value={colegiado}
-            onChange={(e) => setColegiado(e.target.value)}
-            placeholder="Ej. COPC 12345"
+            value={p2}
+            onChange={(e) => setP2(e.target.value)}
+            minLength={8}
             required
           />
         </div>
-
-        <div className="rounded border p-3">
-          <label className="block text-sm font-medium">Modalidad</label>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {(['online', 'inperson', 'hybrid'] as Modality[]).map((m) => (
-              <label key={m} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="modality"
-                  checked={modality === m}
-                  onChange={() => setModality(m)}
-                />
-                <span>
-                  {m === 'online' ? 'Online' : m === 'inperson' ? 'Presencial' : 'Híbrida'}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded border p-3">
-          <label className="block text-sm font-medium">Idiomas de atención</label>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {['es', 'ca', 'en', 'fr', 'pt', 'de'].map((l) => (
-              <label key={l} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={langs.includes(l)}
-                  onChange={() => toggleLang(l)}
-                />
-                <span className="uppercase">{l}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
         <button
           type="submit"
           disabled={saving}
