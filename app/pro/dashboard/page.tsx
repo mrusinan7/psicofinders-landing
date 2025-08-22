@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
 
 // (Opcional) fuerza que no se intente prerender estático
@@ -35,8 +35,9 @@ export default function ProDashboard() {
         return
       }
 
-      const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
-
+      //const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
+	  const supabase = supabaseBrowser()
+	  
       // 1) Sesión
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {

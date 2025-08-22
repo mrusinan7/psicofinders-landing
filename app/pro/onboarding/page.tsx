@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -44,9 +44,7 @@ export default function ProOnboardingSetPassword() {
         const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
         if (!url || !anon) throw new Error('Faltan variables públicas de Supabase')
 
-        const supabase = createClient(url, anon, {
-          auth: { persistSession: true, flowType: 'pkce' },
-        })
+        const supabase = supabaseBrowser()
 
         // 1) Sesión
         const { data: { user } } = await supabase.auth.getUser()

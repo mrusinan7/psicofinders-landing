@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -19,9 +19,7 @@ function CallbackInner() {
       return
     }
 
-    const supabase = createClient(url, anon, {
-      auth: { persistSession: true, flowType: 'pkce' },
-    })
+    const supabase = supabaseBrowser()
 
     ;(async () => {
       try {
