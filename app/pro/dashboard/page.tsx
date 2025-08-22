@@ -1,12 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
-// (Opcional) fuerza que no se intente prerender estático
 export const dynamic = 'force-dynamic'
-
 type Modality = 'inperson' | 'online' | 'hybrid'
 type Therapist = {
   id: string
@@ -17,6 +15,7 @@ type Therapist = {
   price_min: number | null
   price_max: number | null
   onboarding_complete?: boolean | null
+  avatar_url: string | null
 }
 
 export default function ProDashboard() {
@@ -27,106 +26,73 @@ export default function ProDashboard() {
 
   useEffect(() => {
     const run = async () => {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      if (!url || !anon) {
-        setErr('Faltan variables NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY')
+      try {
+        const supabase = supabaseBrowser()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/pro/login'); return }
+
+        const { data, error } = await supabase
+          .from('therapists')
+          .select('id,name,email,colegiado,modality,price_min,price_max,onboarding_complete,avatar_url')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (error) throw error
+        if (!data?.onboarding_complete) { router.replace('/pro/onboarding'); return }
+        setMe(data as Therapist)
         setLoading(false)
-        return
-      }
-
-      //const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
-	  const supabase = supabaseBrowser()
-	  
-      // 1) Sesión
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.replace('/pro/login')
-        return
-      }
-
-      // 2) Perfil + bandera de onboarding (RLS: id = auth.uid())
-      const { data, error } = await supabase
-        .from('therapists')
-        .select('id,name,email,colegiado,modality,price_min,price_max,onboarding_complete')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (error) {
-        setErr(error.message)
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e))
         setLoading(false)
-        return
       }
-
-      // 3) Si no ha completado onboarding, ir a onboarding
-      if (!data?.onboarding_complete) {
-        router.replace('/pro/onboarding')
-        return
-      }
-
-      setMe((data as Therapist) ?? null)
-      setLoading(false)
     }
-
     run()
   }, [router])
 
-  async function signOut() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !anon) return
-    const supabase = supabaseBrowser()
-    await supabase.auth.signOut()
-    router.replace('/pro/login')
-  }
-
-  if (loading) return <main className="mx-auto max-w-2xl p-6">Cargando…</main>
-  if (err) return <main className="mx-auto max-w-2xl p-6 text-red-700">Error: {err}</main>
+  if (loading) return <main className="mx-auto max-w-5xl p-6">Cargando…</main>
+  if (err) return <main className="mx-auto max-w-5xl p-6 text-red-700">{err}</main>
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Panel profesional</h1>
-        <button onClick={signOut} className="rounded bg-black px-3 py-2 text-white">Salir</button>
+    <main className="mx-auto max-w-5xl">
+      <div className="flex items-center gap-4">
+        <div className="h-16 w-16 overflow-hidden rounded-full border bg-white">
+          {me?.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={me.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
+          ) : null}
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">Hola{me?.name ? `, ${me.name}` : ''}</h1>
+          <p className="text-sm text-neutral-600">Gestiona tu ficha, agenda y honorarios.</p>
+        </div>
       </div>
 
-      {!me ? (
-        <div className="mt-4 rounded border p-4">
-          <h2 className="font-semibold">Aún no tienes perfil</h2>
-          <p className="text-sm text-gray-600">
-            Completa tu información para que podamos mostrarte a pacientes.
-          </p>
-          <a className="mt-3 inline-block rounded bg-black px-4 py-2 text-white" href="/pro/onboarding">
-            Empezar onboarding
-          </a>
-        </div>
-      ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border p-4">
-            <h3 className="font-semibold">Datos principales</h3>
-            <p className="text-sm text-gray-700 mt-2">
-              {me.name} · {me.email}<br />
-              Colegiado: {me.colegiado ?? '—'}<br />
-              Modalidad: {me.modality ?? '—'}
-            </p>
-            <a className="mt-3 inline-block rounded border px-3 py-2" href="/pro/perfil">Editar perfil</a>
-          </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <a href="/pro/preview" className="rounded-2xl border bg-white p-4 transition hover:shadow">
+          <h3 className="font-semibold">Vista previa</h3>
+          <p className="mt-1 text-sm text-neutral-600">Previsualiza tu anuncio público.</p>
+        </a>
 
-          <div className="rounded-2xl border p-4">
-            <h3 className="font-semibold">Honorarios</h3>
-            <p className="text-sm text-gray-700 mt-2">
-              {me.price_min ? `${me.price_min}€` : '—'} – {me.price_max ? `${me.price_max}€` : '—'}
-            </p>
-            <a className="mt-3 inline-block rounded border px-3 py-2" href="/pro/honorarios">Editar honorarios</a>
-          </div>
+        <a href="/pro/perfil" className="rounded-2xl border bg-white p-4 transition hover:shadow">
+          <h3 className="font-semibold">Perfil</h3>
+          <p className="mt-1 text-sm text-neutral-600">Nombre, idiomas, contacto y foto.</p>
+        </a>
 
-          <div className="rounded-2xl border p-4">
-            <h3 className="font-semibold">Disponibilidad</h3>
-            <p className="text-sm text-gray-700 mt-2">Configura tus días y franjas de visita.</p>
-            <a className="mt-3 inline-block rounded border px-3 py-2" href="/pro/agenda">Editar agenda</a>
-          </div>
-        </div>
-      )}
+        <a href="/pro/honorarios" className="rounded-2xl border bg-white p-4 transition hover:shadow">
+          <h3 className="font-semibold">Honorarios</h3>
+          <p className="mt-1 text-sm text-neutral-600">Actualiza tus rangos por sesión.</p>
+        </a>
+
+        <a href="/pro/agenda" className="rounded-2xl border bg-white p-4 transition hover:shadow">
+          <h3 className="font-semibold">Agenda</h3>
+          <p className="mt-1 text-sm text-neutral-600">Franjas de disponibilidad.</p>
+        </a>
+
+        <a href="/pro/password" className="rounded-2xl border bg-white p-4 transition hover:shadow">
+          <h3 className="font-semibold">Contraseña</h3>
+          <p className="mt-1 text-sm text-neutral-600">Cambia tu clave de acceso.</p>
+        </a>
+      </div>
     </main>
   )
 }
