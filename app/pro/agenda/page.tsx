@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,10 +11,18 @@ type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 type Availability = Record<DayKey, Slot[]>
 
 const DAY_LABELS: Record<DayKey, string> = {
-  mon: 'Lunes', tue: 'Martes', wed: 'Miércoles', thu: 'Jueves', fri: 'Viernes', sat: 'Sábado', sun: 'Domingo'
+  mon: 'Lunes',
+  tue: 'Martes',
+  wed: 'Miércoles',
+  thu: 'Jueves',
+  fri: 'Viernes',
+  sat: 'Sábado',
+  sun: 'Domingo',
 }
 
-const EMPTY_AVAIL: Availability = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }
+const EMPTY_AVAIL: Availability = {
+  mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [],
+}
 
 export default function ProAgendaPage() {
   const router = useRouter()
@@ -27,12 +35,8 @@ export default function ProAgendaPage() {
   useEffect(() => {
     const run = async () => {
       try {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        if (!url || !anon) throw new Error('Faltan variables públicas de Supabase')
-        //const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
-		const supabase = supabaseBrowser()
-		
+        const supabase = supabaseBrowser()
+
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { router.replace('/pro/login'); return }
 
@@ -43,6 +47,7 @@ export default function ProAgendaPage() {
           .maybeSingle()
 
         if (error) throw error
+
         const a = (data?.availability ?? {}) as Partial<Availability>
         setAvail({
           mon: a.mon ?? [],
@@ -67,8 +72,7 @@ export default function ProAgendaPage() {
     setAvail(prev => {
       const curr = prev[day]
       if (curr.length >= 3) return prev
-      const next: Slot[] = [...curr, { start: '09:00', end: '13:00' }]
-      return { ...prev, [day]: next }
+      return { ...prev, [day]: [...curr, { start: '09:00', end: '13:00' }] }
     })
   }
 
@@ -87,7 +91,6 @@ export default function ProAgendaPage() {
   }
 
   function isValidRange(s: Slot): boolean {
-    // formato HH:MM y start < end
     const re = /^\d{2}:\d{2}$/
     if (!re.test(s.start) || !re.test(s.end)) return false
     return s.start < s.end
@@ -96,15 +99,14 @@ export default function ProAgendaPage() {
   async function onSave() {
     setSaving(true); setErr(null); setOk(null)
     try {
-      // Validación básica
-      for (const d of Object.keys(avail) as DayKey[]) {
-        for (const s of avail[d]) {
+      // Validación
+      (Object.keys(avail) as DayKey[]).forEach(d => {
+        avail[d].forEach(s => {
           if (!isValidRange(s)) throw new Error(`Revisa los horarios de ${DAY_LABELS[d]}`)
-        }
-      }
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
+        })
+      })
+
+      const supabase = supabaseBrowser()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/pro/login'); return }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
 
 export default function ProLogin() {
@@ -24,7 +24,7 @@ export default function ProLogin() {
       return
     }
 
-    const supabase = createClient(url, anon, { auth: { persistSession: true } })
+    const supabase = supabaseBrowser()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     setLoading(false)

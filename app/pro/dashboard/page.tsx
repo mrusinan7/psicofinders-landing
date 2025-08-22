@@ -75,7 +75,7 @@ export default function ProDashboard() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     if (!url || !anon) return
-    const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
+    const supabase = supabaseBrowser()
     await supabase.auth.signOut()
     router.replace('/pro/login')
   }

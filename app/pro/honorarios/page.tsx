@@ -53,7 +53,7 @@ export default function ProHonorariosPage() {
     try {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      const supabase = createClient(url, anon, { auth: { persistSession: true, flowType: 'pkce' } })
+      const supabase = supabaseBrowser()
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/pro/login'); return }
